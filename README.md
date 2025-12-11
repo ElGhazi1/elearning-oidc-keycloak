@@ -13,37 +13,38 @@ L'architecture repose sur trois composants majeurs :
 2.  Configuration du Serveur d'Identité (Keycloak)
 3.  Implémentation du Backend (Spring Boot)
 4.  Implémentation du Frontend (React)
-5.  Démonstration et Captures
+5.  Démonstration et Scénarios de Test
 6.  Conclusion
 7.  Webographie
 
 ---
 
 ## 1. Architecture du Projet
-L'architecture logicielle suit le modèle standard OAuth2 :
-* **Authorization Server (Keycloak)** : Gère les utilisateurs, les rôles et délivre les jetons JWT (Access Token, ID Token, Refresh Token).
-* **Resource Server (Spring Boot)** : Expose une API REST sécurisée qui valide la signature des jetons JWT via l'Issuer Keycloak.
-* **Client (React)** : Application Single Page (SPA) qui redirige l'utilisateur vers Keycloak pour l'authentification et stocke le jeton pour les requêtes API.
+L'architecture logicielle suit le modèle standard OAuth2. Keycloak agit comme l'autorité centrale de confiance, délivrant des jetons JWT que le Frontend (React) transmet au Backend (Spring Boot) pour accéder aux ressources protégées.
+
+![Architecture Globale](screens/general_view_schema_of_project.png)
 
 ---
 
 ## 2. Configuration du Serveur d'Identité (Keycloak)
 
-### 2.1 Configuration du Realm et du Client
-* **Realm** : Création d'un espace dédié nommé `elearning-realm`.
-* **Client ID** : `react-client`.
-* **Type de Client** : Public (car l'application SPA ne peut pas stocker de secret client de manière sécurisée).
-* **Flux (Flow)** : Standard Flow (Authorization Code Flow).
-* **Redirect URI** : `http://localhost:3000/*` pour autoriser les retours vers l'application React après authentification.
+### 2.1 Déploiement et Initialisation
+Keycloak est déployé via un conteneur Docker.
+![Keycloak Container](screens/keycloak%20screen%20container%20ruuning%20with%20inspect.png)
 
-### 2.2 Gestion des Rôles et Utilisateurs
-Deux rôles principaux ont été définis pour la ségrégation des tâches :
-* `ROLE_ADMIN` : Accès complet (lecture et écriture).
+### 2.2 Configuration du Realm et des Utilisateurs
+Un Realm dédié `elearning-realm` a été créé pour isoler les données de l'application. Deux utilisateurs de test ont été provisionnés : `admin1` et `user1`.
+![Realm Users](screens/elearning%20realm%20space%20showing%20users%20created.png)
+
+### 2.3 Gestion des Rôles (RBAC)
+Deux rôles principaux ont été définis :
+* `ROLE_ADMIN` : Accès complet.
 * `ROLE_STUDENT` : Accès en lecture seule.
+![Realm Roles](screens/screen%20show%20realm%20roles%20created%20role_admin%20role_student.png)
 
-Utilisateurs de test créés :
-* `admin1` (rôle : ADMIN)
-* `user1` (rôle : STUDENT)
+### 2.4 Configuration du Client OIDC
+Le client `react-client` est configuré en mode **Public** avec une URI de redirection autorisant `http://localhost:3000/*`.
+![React Client Config](screens/react%20client%20created%20with%20valide%20redirection%20rul%20set%20localhost:3000.png)
 
 ---
 
@@ -51,53 +52,49 @@ Utilisateurs de test créés :
 
 Le backend est une application Java Spring Boot configurée en tant que *OAuth2 Resource Server*.
 
-### 3.1 Dépendances
-* `spring-boot-starter-web`
-* `spring-boot-starter-security`
-* `spring-boot-starter-oauth2-resource-server`
+### 3.1 Structure du Projet
+Organisation des packages respectant l'architecture en couches (Controller, Service, Repository, Security Config).
+![Backend Structure](screens/structure%20des%20fichiers%20dans%20backend.png)
 
 ### 3.2 Configuration de la Sécurité
-La classe `SecurityConfig` définit la chaîne de filtres de sécurité. Le validateur de JWT a été configuré pour interpréter les rôles fournis par Keycloak et les mapper en autorités Spring Security.
+Le fichier `application.properties` définit l'URI de l'émetteur (Issuer) pour la validation des tokens JWT.
+![Application Properties](screens/scrreen%20de%20application%20properties%20rules.png)
 
-Règles d'accès (RBAC) :
-* `GET /courses` : Autorisé pour **ADMIN** et **STUDENT**.
-* `POST /courses` : Strictement réservé à **ADMIN**.
-* `GET /me` : Retourne les informations du profil utilisateur connecté.
+La classe `SecurityConfig` implémente la chaîne de filtres de sécurité et le mapping des rôles OIDC vers les autorités Spring Security.
+![Security Config Code](screens/secureconfig%20screen%20code.png)
 
-Les annotations `@PreAuthorize` ont été utilisées dans les contrôleurs pour sécuriser les méthodes spécifiques.
+### 3.3 Contrôleurs API
+Le `CourseController` expose les endpoints REST sécurisés par les annotations `@PreAuthorize`.
+![Course Controller Code](screens/courseController%20screen.png)
+
+### 3.4 Exécution
+Le serveur démarre sur le port 8081 (Tomcat).
+![Backend Running](screens/screen%20show%20backend%20running%20in%208081%20tomcat%20listeing.png)
 
 ---
 
 ## 4. Implémentation du Frontend (React)
 
-Le frontend est développé avec React et utilise la librairie `keycloak-js` pour l'interaction avec le serveur OIDC.
+Le frontend utilise `keycloak-js` pour gérer le cycle de vie de l'authentification.
 
-### 4.1 Intégration OIDC
-* Initialisation de l'adaptateur Keycloak au démarrage de l'application.
-* Gestion automatique du rafraîchissement du token (Silent Refresh).
+### 4.1 Structure du Projet React
+![Frontend Structure](screens/structure%20frontend%20react.png)
 
-### 4.2 Sécurisation des Vues
-L'interface s'adapte dynamiquement selon les rôles contenus dans le token :
-* La section "Gestion des cours" (ajout/modification) n'est visible que si l'utilisateur possède le rôle `ROLE_ADMIN`.
-* Les informations de l'utilisateur (Nom, Email) sont extraites du endpoint `/userinfo` ou du ID Token.
-
-### 4.3 Communication API
-Un intercepteur HTTP a été configuré pour injecter le header `Authorization: Bearer <token>` dans chaque requête sortante vers le backend Spring Boot.
+### 4.2 Démarrage du Client
+L'application client tourne sur le port 3000.
+![Frontend Running](screens/screen%20terminal%20show%20data%20fronted%20ruuning%20successfully.png)
 
 ---
 
-## 5. Démonstration et Captures
+## 5. Démonstration et Scénarios de Test
 
-Les captures d'écran validant le fonctionnement du système sont disponibles dans le dossier `/screens` de ce dépôt.
+### 5.1 Redirection vers l'Authentification
+Lors de l'accès à l'application, l'utilisateur non authentifié est automatiquement redirigé vers la page de login Keycloak.
+![Login Redirect](screens/success%20redirection%20to%20keycloak%20login%20page.png)
 
-Éléments validés :
-1.  **Démarrage des services** : Keycloak (Docker), Backend (Tomcat 8081), Frontend (Node 3000).
-2.  **Flux de redirection** : Redirection automatique vers la page de login Keycloak.
-3.  **Authentification** : Connexion réussie en tant que Admin et Student.
-4.  **Contrôle d'accès** :
-    * Affichage de la liste des cours (Succès).
-    * Tentative d'ajout de cours par un Student (403 Forbidden).
-    * Ajout de cours par un Admin (200 OK).
+### 5.2 Accès Autorisé (Zone Admin)
+Une fois connecté avec un compte disposant du rôle `ROLE_ADMIN`, l'utilisateur accède à la plateforme et peut visualiser les fonctionnalités d'administration.
+![Admin Access Success](screens/success%20login%20as%20admin%20zone%20in%20elearning%20platform.png)
 
 ---
 
